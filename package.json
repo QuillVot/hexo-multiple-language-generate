@@ -1,0 +1,21 @@
+{
+  "name": "hexo-multiple-language-generate",
+  "version": "1.0.0",
+  "description": "hexo multi-language support plugin",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "hexo": "^7.3.0"
+  },
+  "author": {
+    "name": "QuillVot",
+    "url": "https://github.com/QuillVot"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/QuillVot/hexo-multiple-language-generate.git"
+  },
+  "license": "MIT"
+}
