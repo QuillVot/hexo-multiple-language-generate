@@ -1,6 +1,6 @@
 {
   "name": "hexo-multiple-language-generate",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "hexo multi-language support plugin",
   "main": "index.js",
   "scripts": {
