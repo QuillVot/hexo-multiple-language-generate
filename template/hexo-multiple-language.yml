@@ -1,0 +1,66 @@
+# Hexo多语言站点配置
+# 用于生成多语言版本的静态博客站点
+hexo-multiple-language:
+  # ===== 默认语言配置 =====
+  default-language:
+    # Hexo默认语言的生成目录
+    "generate-dir": "public"
+
+    # 默认语言的配置文件列表
+    # 支持设置多个配置文件,按顺序加载并合并
+    "config-file-name": [
+      "config.zh",           # Hexo主配置文件
+      "config.butterfly.zh"  # Butterfly主题配置文件
+    ]
+
+  # ===== 其他语言配置 =====
+  # 可配置多个其他语言版本
+  other-language: [
+    {
+      "enable": true,              # 是否启用该语言
+      "generate-dir": "public-en", # 当前语言的生成目录
+      "language-path": "en",       # 生成到主语言目录下的子目录名
+      "config-file-name": [
+        "config.en",              # 英文版Hexo配置
+        "config.butterfly.en"     # 英文版主题配置
+      ]
+    },
+    {
+      "enable": true,
+      "generate-dir": "public-ja",
+      "language-path": "ja",
+      "config-file-name": [
+        "config.ja",
+        "config.butterfly.ja"
+      ]
+    }
+  ]
+
+  # ===== 语言切换配置 =====
+  # 基于浏览器语言自动切换或手动切换的相关配置
+  switch-language:
+    # 是否启用语言切换功能
+    enable: true
+
+    # 使用的主题配置文件
+    support-theme: "config.butterfly"
+
+    # 手动切换语言后的有效期(单位:毫秒)
+    storage-ttl: 100000
+
+    # 当浏览器语言不匹配时使用的默认语言
+    not-matched-use: 'en'
+
+    # 默认语言支持的语言代码列表
+    default-language: [
+      "zh",
+      "zh-CN"
+    ]
+
+    # 其他语言支持的语言代码映射
+    # key: 对应language-path的值
+    # value: 该语言支持的语言代码列表
+    other-language: {
+      "en": ["en"],
+      "ja": ["ja"]
+    }
