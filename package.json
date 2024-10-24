@@ -9,6 +9,11 @@
   "dependencies": {
     "hexo": "^7.3.0"
   },
+  "keywords": [
+    "npm",
+    "hexo",
+    "hexo multiple-language-generate"
+  ],
   "author": {
     "name": "QuillVot",
     "url": "https://github.com/QuillVot"
@@ -16,6 +21,14 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/QuillVot/hexo-multiple-language-generate.git"
+  },
+  "homepage": "https://github.com/QuillVot/hexo-multiple-language-generate",
+  "bugs": {
+    "url": "https://github.com/QuillVot/hexo-multiple-language-generate/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true
   },
   "license": "MIT"
 }
