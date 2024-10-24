@@ -59,7 +59,7 @@ hexo-multiple-language:
 
     # 其他语言支持的语言代码映射
     # key: 对应language-path的值
-    # value: 该语言支持的语言代码列表
+    # value: 该语言支持的语言代码列表，value可配置多个，如 "ja":["ja","en-CA"]，表示浏览器设置的语言是加拿大英语，默认也显示日语
     other-language: {
       "en": ["en"],
       "ja": ["ja"]
