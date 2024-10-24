@@ -9,7 +9,9 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Clone repository
         uses: actions/checkout@v4.2.1 # 克隆代码
