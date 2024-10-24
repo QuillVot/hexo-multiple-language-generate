@@ -19,9 +19,6 @@ jobs:
         with:
           node-version: "20.6.0"
 
-      - name: Build step
-        run: 'npm install && npm run build' # 安装依赖并打包
-
       - name: Publish to npm
         run: npm publish --access public
         env:
