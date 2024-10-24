@@ -6,7 +6,7 @@ on:
   # 提交触发
   push:
     branches: [ main ]
-    
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,7 +21,6 @@ jobs:
         with:
           node-version: '20.6.0'
           registry-url: 'https://registry.npmjs.org'
-      - run: npm ci
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
