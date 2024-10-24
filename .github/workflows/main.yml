@@ -1,29 +1,28 @@
-name: Publish Package to npmjs
-
+name: Publish to npm
 on:
   # 手动触发
   workflow_dispatch:
-  # 提交触发
   push:
-    branches: [ main ]
+    branches: main
 
 jobs:
-  build:
+  publish:
+    name: Publish
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+
     steps:
-      - name: CheckOut Branch
-        uses: actions/checkout@v4.2.1
+      - name: Clone repository
+        uses: actions/checkout@v4.2.1 # 克隆代码
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4.0.4 # 安装 Node.js
         with:
-          ref: main
-      # Setup .npmrc file to publish to npm
-      - name: Install Node
-        uses: actions/setup-node@v4.0.4
-        with:
-          node-version: '20.6.0'
-          registry-url: 'https://registry.npmjs.org'
-      - run: npm publish
+          node-version: "20.6.0"
+
+      - name: Build step
+        run: 'npm install && npm run build' # 安装依赖并打包
+
+      - name: Publish to npm
+        run: npm publish --access public
         env:
-          NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # 调用 github 填写的 NPM_TOKEN
