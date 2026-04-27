@@ -1,10 +1,11 @@
 /**
  * 多语言网站生成工具
  * 用于处理 Hexo 博客的多语言版本生成
- * 同步版本实现
+ * 并行隔离构建实现
  */
 
-const { execSync } = require('child_process');
+const { spawn } = require('child_process');
+const os = require('os');
 const path = require('path');
 const {
     readFileSync,
@@ -15,7 +16,9 @@ const {
     readdirSync,
     rmSync,
     lstatSync,
-    writeFileSync
+    writeFileSync,
+    mkdtempSync,
+    symlinkSync
 } = require('fs');
 
 // 常量配置
@@ -27,7 +30,9 @@ const CONFIG = {
     // 语言切换脚本标签
     SWITCH_LANGUAGE_SCRIPT: '<script defer src="/self/js/switch-language.js"></script>',
     // 配置文件名
-    CONFIG_FILE: 'hexo-multiple-language.yml'
+    CONFIG_FILE: 'hexo-multiple-language.yml',
+    // 临时构建目录前缀
+    BUILD_DIR_PREFIX: 'hexo-multiple-language-'
 };
 
 /**
@@ -78,16 +83,17 @@ class FileSystemUtils {
      * @param {string} source - 源目录路径
      * @param {string} destination - 目标目录路径
      */
-    static copyDirectory(source, destination) {
+    static copyDirectory(source, destination, filter = () => true) {
         try {
             this.createDirectory(destination);
 
             readdirSync(source).forEach(item => {
                 const srcPath = path.join(source, item);
                 const destPath = path.join(destination, item);
+                if (!filter(srcPath, destPath, item)) return;
 
                 if (lstatSync(srcPath).isDirectory()) {
-                    this.copyDirectory(srcPath, destPath);
+                    this.copyDirectory(srcPath, destPath, filter);
                 } else {
                     copyFileSync(srcPath, destPath);
                 }
@@ -96,6 +102,16 @@ class FileSystemUtils {
             console.error(`复制目录失败: ${source} -> ${destination}`, error);
             throw error;
         }
+    }
+
+    /**
+     * 创建符号链接，目标不存在时静默跳过
+     * @param {string} source - 源路径
+     * @param {string} destination - 目标路径
+     */
+    static linkIfExists(source, destination) {
+        if (!existsSync(source) || existsSync(destination)) return;
+        symlinkSync(source, destination, lstatSync(source).isDirectory() ? 'junction' : 'file');
     }
 }
 
@@ -108,10 +124,14 @@ class ConfigManager {
      * @param {string} filePath - YAML 文件路径
      * @returns {Object} 解析后的配置对象
      */
-    static loadYaml(filePath) {
+    static loadYaml(filePath, hexoInstance) {
         try {
             const content = readFileSync(filePath, 'utf8');
-            return hexo.render.renderSync({ text: content, engine: 'yaml' });
+            const renderer = hexoInstance || (typeof hexo !== 'undefined' ? hexo : null);
+            if (!renderer?.render?.renderSync) {
+                throw new Error('缺少 Hexo 渲染器，无法解析 YAML 配置');
+            }
+            return renderer.render.renderSync({ text: content, engine: 'yaml' });
         } catch (error) {
             console.error(`读取YAML文件失败: ${filePath}`, error);
             throw error;
@@ -148,6 +168,64 @@ class ConfigManager {
             throw error;
         }
     }
+
+    /**
+     * 在 YAML 文本中注入 inject.bottom 脚本，尽量保留原有格式与注释
+     * @param {string} content - YAML 内容
+     * @param {string} script - 需要注入的脚本标签
+     * @returns {string} 注入后的 YAML 内容
+     */
+    static injectBottomScript(content, script) {
+        if (content.includes(script)) return content;
+
+        const lines = content.replace(/\r\n/g, '\n').split('\n');
+        const quotedScript = `'${script.replace(/'/g, "''")}'`;
+        const injectIndex = lines.findIndex(line => /^inject\s*:\s*(?:#.*)?$/.test(line));
+
+        if (injectIndex === -1) {
+            const ending = content.endsWith('\n') ? '' : '\n';
+            return `${content}${ending}\ninject:\n  bottom:\n    - ${quotedScript}\n`;
+        }
+
+        const injectIndent = this.getIndent(lines[injectIndex]);
+        const injectEnd = this.findBlockEnd(lines, injectIndex + 1, injectIndent);
+        const bottomIndex = lines.findIndex((line, index) => {
+            if (index <= injectIndex || index >= injectEnd) return false;
+            return this.getIndent(line) > injectIndent && /^\s*bottom\s*:/.test(line);
+        });
+
+        if (bottomIndex === -1) {
+            lines.splice(injectIndex + 1, 0, `${' '.repeat(injectIndent + 2)}bottom:`, `${' '.repeat(injectIndent + 4)}- ${quotedScript}`);
+            return this.joinYamlLines(lines);
+        }
+
+        const bottomIndent = this.getIndent(lines[bottomIndex]);
+        let bottomEnd = this.findBlockEnd(lines, bottomIndex + 1, bottomIndent);
+        while (bottomEnd > bottomIndex + 1 && !lines[bottomEnd - 1].trim()) {
+            bottomEnd--;
+        }
+        lines.splice(bottomEnd, 0, `${' '.repeat(bottomIndent + 2)}- ${quotedScript}`);
+        return this.joinYamlLines(lines);
+    }
+
+    static getIndent(line) {
+        const match = line.match(/^\s*/);
+        return match ? match[0].length : 0;
+    }
+
+    static findBlockEnd(lines, startIndex, parentIndent) {
+        for (let index = startIndex; index < lines.length; index++) {
+            const line = lines[index];
+            if (!line.trim() || line.trim().startsWith('#')) continue;
+            if (this.getIndent(line) <= parentIndent) return index;
+        }
+        return lines.length;
+    }
+
+    static joinYamlLines(lines) {
+        const content = lines.join('\n');
+        return content.endsWith('\n') ? content : `${content}\n`;
+    }
 }
 
 /**
@@ -168,20 +246,17 @@ class MultiLanguageGenerator {
      * @param {boolean} supportTheme - 是否支持主题切换
      * @returns {string} 新配置文件路径
      */
-    processConfigFile(fileName, supportTheme) {
+    processConfigFile(fileName, supportTheme, workingDir = this.baseDir) {
         try {
             const sourcePath = path.join(this.baseDir, `${fileName}.yml`);
-            const destPath = path.join(this.baseDir, `_${fileName.replace(/\.[^.]*$/, '')}.yml`);
+            const destPath = path.join(workingDir, `_${fileName.replace(/\.[^.]*$/, '')}.yml`);
 
             FileSystemUtils.remove(destPath);
             copyFileSync(sourcePath, destPath);
 
             if (supportTheme && fileName.startsWith(supportTheme)) {
-                const config = ConfigManager.loadYaml(destPath);
-                ConfigManager.updateArrayNode(config, 'inject.bottom', CONFIG.SWITCH_LANGUAGE_SCRIPT);
-
-                FileSystemUtils.remove(destPath);
-                writeFileSync(destPath, JSON.stringify(config, null, 2), 'utf8');
+                const content = readFileSync(destPath, 'utf8');
+                writeFileSync(destPath, ConfigManager.injectBottomScript(content, CONFIG.SWITCH_LANGUAGE_SCRIPT), 'utf8');
             }
 
             return destPath;
@@ -193,15 +268,53 @@ class MultiLanguageGenerator {
 
     /**
      * 执行 Hexo 清理和生成命令
+     * @param {string} workingDir - 独立构建目录
      */
-    executeHexoCommands() {
-        try {
-            execSync('hexo clean', { stdio: 'inherit' });
-            execSync('hexo generate', { stdio: 'inherit' });
-        } catch (error) {
-            console.error('执行Hexo命令失败', error);
-            throw error;
+    async executeHexoCommands(workingDir) {
+        await this.runHexoCommand(['clean'], workingDir);
+        await this.runHexoCommand(['generate'], workingDir);
+    }
+
+    /**
+     * 执行单个 Hexo 命令
+     * @param {string[]} args - Hexo 参数
+     * @param {string} workingDir - 工作目录
+     */
+    runHexoCommand(args, workingDir) {
+        const command = this.resolveHexoCommand();
+
+        return new Promise((resolve, reject) => {
+            const child = spawn(command, args, {
+                cwd: workingDir,
+                stdio: 'inherit',
+                shell: process.platform === 'win32'
+            });
+
+            child.on('error', reject);
+            child.on('close', code => {
+                if (code === 0) {
+                    resolve();
+                    return;
+                }
+                reject(new Error(`Hexo 命令执行失败: ${command} ${args.join(' ')} (exit ${code})`));
+            });
+        });
+    }
+
+    /**
+     * 优先使用项目本地 Hexo，避免依赖全局命令
+     * @returns {string} Hexo 可执行文件
+     */
+    resolveHexoCommand() {
+        const binName = process.platform === 'win32' ? 'hexo.cmd' : 'hexo';
+        const localBin = path.join(this.baseDir, 'node_modules', '.bin', binName);
+        if (existsSync(localBin)) return localBin;
+
+        if (process.argv[1] && path.basename(process.argv[1]).startsWith('hexo')) {
+            return process.argv[1];
         }
+
+        return 'hexo';
     }
 
     /**
@@ -217,20 +330,7 @@ class MultiLanguageGenerator {
             FileSystemUtils.createDirectory(path.dirname(targetPath));
             copyFileSync(sourcePath, targetPath);
 
-            let content = readFileSync(targetPath, 'utf8');
-
-            // 替换配置内容
-            const replacements = {
-                'const storage_ttl = 60000;': `const storage_ttl = ${switchConfig['storage-ttl']};`,
-                'const defaultLanguage = [\'zh\'];': `const defaultLanguage = ${JSON.stringify(switchConfig['default-language'])};`,
-                'const notMatchedLanguage = \'en\';': `const notMatchedLanguage = '${switchConfig['not-matched-use']}';`,
-                'const supportedLanguages = {"en": ["en"], "ja": ["ja", "en-CA"]};':
-                    `const supportedLanguages = ${JSON.stringify(switchConfig['other-language'])};`
-            };
-
-            Object.entries(replacements).forEach(([search, replace]) => {
-                content = content.replace(search, replace);
-            });
+            const content = this.renderSwitchLanguageContent(readFileSync(targetPath, 'utf8'), switchConfig);
 
             writeFileSync(targetPath, content, 'utf8');
         } catch (error) {
@@ -240,54 +340,182 @@ class MultiLanguageGenerator {
     }
 
     /**
-     * 备份生成的文件
-     * @param {string} sourceDir - 源目录
-     * @param {string} backupDir - 备份目录
+     * 将用户配置写入语言切换脚本模板
+     * @param {string} content - 原始脚本内容
+     * @param {Object} switchConfig - 语言切换配置
+     * @returns {string} 渲染后的脚本内容
      */
-    backupPublic(sourceDir, backupDir) {
-        try {
-            const sourcePath = path.join(this.baseDir, sourceDir);
-            const backupPath = path.join(this.baseDir, backupDir);
+    renderSwitchLanguageContent(content, switchConfig) {
+        const storageTtl = Number.isFinite(Number(switchConfig['storage-ttl']))
+            ? Number(switchConfig['storage-ttl'])
+            : 60000;
+        const defaultLanguage = Array.isArray(switchConfig['default-language'])
+            ? switchConfig['default-language']
+            : ['zh'];
+        const notMatchedLanguage = switchConfig['not-matched-use'] || 'en';
+        const supportedLanguages = switchConfig['other-language'] || {};
 
-            FileSystemUtils.createDirectory(backupPath, true);
-            FileSystemUtils.copyDirectory(sourcePath, backupPath);
-            FileSystemUtils.remove(sourcePath, true);
-        } catch (error) {
-            console.error('备份文件失败', error);
-            throw error;
-        }
+        const replacements = [
+            [/const storage_ttl = \d+;/, `const storage_ttl = ${storageTtl};`],
+            [/const defaultLanguage = \[[\s\S]*?\];/, `const defaultLanguage = ${JSON.stringify(defaultLanguage)};`],
+            [/const notMatchedLanguage = ['"][\s\S]*?['"];/, `const notMatchedLanguage = ${JSON.stringify(notMatchedLanguage)};`],
+            [/const supportedLanguages = \{[\s\S]*?\};/, `const supportedLanguages = ${JSON.stringify(supportedLanguages, null, 4)};`]
+        ];
+
+        return replacements.reduce((result, [search, replace]) => result.replace(search, replace), content);
     }
 
     /**
-     * 合并语言版本
-     * @param {Array} processedDirs - 已处理的目录列表
-     * @param {string} defaultGenDir - 默认生成目录
+     * 生成所有需要并行构建的语言上下文
+     * @param {Object} multiLangConfig - 插件配置
+     * @returns {Array<Object>} 语言构建配置
      */
-    mergeLanguageVersions(processedDirs, defaultGenDir) {
-        try {
-            processedDirs.forEach(({ languagePath, bakDir }) => {
-                const sourcePath = path.join(this.baseDir, bakDir);
-                const targetPath = path.join(this.baseDir, `${defaultGenDir}/${languagePath}`);
-
-                FileSystemUtils.createDirectory(targetPath, true);
-                FileSystemUtils.copyDirectory(sourcePath, targetPath);
-                FileSystemUtils.remove(sourcePath, true);
-            });
-        } catch (error) {
-            console.error('合并语言版本失败', error);
-            throw error;
+    createLanguageBuilds(multiLangConfig) {
+        const defaultLanguage = multiLangConfig['default-language'];
+        if (!defaultLanguage) {
+            throw new Error('缺少 default-language 配置');
         }
+
+        const defaultBuild = {
+            name: 'default',
+            isDefault: true,
+            generateDir: defaultLanguage['generate-dir'],
+            configFiles: defaultLanguage['config-file-name'] || []
+        };
+
+        const otherBuilds = (multiLangConfig['other-language'] || [])
+            .filter(lang => lang.enable)
+            .map(lang => ({
+                name: lang['language-path'],
+                isDefault: false,
+                languagePath: lang['language-path'],
+                generateDir: lang['generate-dir'],
+                configFiles: lang['config-file-name'] || []
+            }));
+
+        return [defaultBuild, ...otherBuilds];
+    }
+
+    /**
+     * 为单个语言创建独立构建目录
+     * @param {Object} build - 语言构建配置
+     * @param {string|null} switchSupportTheme - 需要注入的主题配置名前缀
+     * @param {string[]} outputDirs - 所有输出目录
+     * @returns {Object} 构建上下文
+     */
+    createBuildContext(build, switchSupportTheme, outputDirs) {
+        const buildDir = mkdtempSync(path.join(os.tmpdir(), CONFIG.BUILD_DIR_PREFIX));
+        this.copyProjectToBuildDir(buildDir, outputDirs);
+
+        build.configFiles.forEach(configFile => {
+            this.processConfigFile(configFile, switchSupportTheme, buildDir);
+        });
+
+        return {
+            ...build,
+            buildDir,
+            outputDir: path.join(buildDir, build.generateDir)
+        };
+    }
+
+    /**
+     * 复制项目到临时构建目录，跳过会造成冲突或体积过大的路径
+     * @param {string} buildDir - 临时构建目录
+     * @param {string[]} outputDirs - 需要跳过的输出目录
+     */
+    copyProjectToBuildDir(buildDir, outputDirs) {
+        const skippedNames = new Set(['.git', 'node_modules', 'coverage', '.DS_Store']);
+        const skippedOutputDirs = outputDirs
+            .filter(Boolean)
+            .map(outputDir => path.normalize(outputDir));
+
+        FileSystemUtils.copyDirectory(this.baseDir, buildDir, sourcePath => {
+            const relativePath = path.relative(this.baseDir, sourcePath);
+            if (!relativePath) return true;
+
+            const firstSegment = relativePath.split(path.sep)[0];
+            if (skippedNames.has(firstSegment)) return false;
+            if (skippedOutputDirs.some(outputDir => relativePath === outputDir || relativePath.startsWith(`${outputDir}${path.sep}`))) {
+                return false;
+            }
+            if (firstSegment.startsWith(CONFIG.GENERATE_DIR_PREFIX)) return false;
+            return true;
+        });
+
+        FileSystemUtils.linkIfExists(path.join(this.baseDir, 'node_modules'), path.join(buildDir, 'node_modules'));
+    }
+
+    /**
+     * 并行执行所有语言构建
+     * @param {Object[]} contexts - 构建上下文
+     * @returns {Promise<Object[]>} 构建结果
+     */
+    runBuildsInParallel(contexts) {
+        const tasks = contexts.map(async context => {
+            console.log(`开始构建语言: ${context.name}`);
+            await this.executeHexoCommands(context.buildDir);
+            console.log(`完成构建语言: ${context.name}`);
+            return context;
+        });
+
+        return Promise.allSettled(tasks).then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+                throw new Error(failures.map(result => result.reason.message).join('\n'));
+            }
+            return results.map(result => result.value);
+        });
+    }
+
+    /**
+     * 合并所有语言输出
+     * @param {Object[]} contexts - 构建上下文
+     * @param {string} defaultGenDir - 默认语言输出目录
+     */
+    mergeLanguageOutputs(contexts, defaultGenDir) {
+        const defaultContext = contexts.find(context => context.isDefault);
+        if (!defaultContext || !existsSync(defaultContext.outputDir)) {
+            throw new Error(`默认语言输出目录不存在: ${defaultContext?.outputDir || defaultGenDir}`);
+        }
+
+        const finalOutputDir = path.join(this.baseDir, defaultGenDir);
+        FileSystemUtils.createDirectory(finalOutputDir, true);
+        FileSystemUtils.copyDirectory(defaultContext.outputDir, finalOutputDir);
+
+        contexts
+            .filter(context => !context.isDefault)
+            .forEach(context => {
+                if (!existsSync(context.outputDir)) {
+                    throw new Error(`语言 ${context.name} 输出目录不存在: ${context.outputDir}`);
+                }
+                const targetPath = path.join(finalOutputDir, context.languagePath);
+                FileSystemUtils.createDirectory(targetPath, true);
+                FileSystemUtils.copyDirectory(context.outputDir, targetPath);
+            });
+    }
+
+    /**
+     * 清理所有临时构建目录
+     * @param {Object[]} contexts - 构建上下文
+     */
+    cleanupBuildContexts(contexts) {
+        contexts.forEach(context => {
+            if (context.buildDir) {
+                FileSystemUtils.remove(context.buildDir, true);
+            }
+        });
     }
 
     /**
      * 主要处理流程
      */
-    process() {
-        try {
-            console.log('开始处理多语言生成...');
+    async process() {
+        const contexts = [];
 
-            // 加载配置
-            const config = ConfigManager.loadYaml(path.join(this.baseDir, CONFIG.CONFIG_FILE));
+        try {
+            console.log('开始处理多语言并行生成...');
+
+            const config = ConfigManager.loadYaml(path.join(this.baseDir, CONFIG.CONFIG_FILE), this.hexo);
             const multiLangConfig = config['hexo-multiple-language'];
 
             if (!multiLangConfig) {
@@ -296,75 +524,57 @@ class MultiLanguageGenerator {
             }
 
             const switchConfig = multiLangConfig['switch-language'];
-            const otherLanguages = multiLangConfig['other-language'] || [];
-            const defaultLanguage = multiLangConfig['default-language'];
+            const switchSupportTheme = switchConfig?.enable ? switchConfig?.['support-theme'] : null;
+            const builds = this.createLanguageBuilds(multiLangConfig);
+            const outputDirs = builds.map(build => build.generateDir);
 
-            // 处理其他语言
-            console.log('处理其他语言配置...');
-            const processedDirs = [];
-            otherLanguages.forEach(lang => {
-                if (!lang.enable) return;
-
-                // 处理配置文件
-                lang['config-file-name'].forEach(configFile => {
-                    this.processConfigFile(configFile, switchConfig?.['support-theme']);
-                });
-
-                // 生成并备份
-                this.executeHexoCommands();
-                const bakDir = `${CONFIG.GENERATE_DIR_PREFIX}${lang['generate-dir']}`;
-                this.backupPublic(lang['generate-dir'], bakDir);
-
-                processedDirs.push({
-                    languagePath: lang['language-path'],
-                    bakDir: bakDir
-                });
+            builds.forEach(build => {
+                contexts.push(this.createBuildContext(build, switchSupportTheme, outputDirs));
             });
 
-            // 处理默认语言
-            if (defaultLanguage) {
-                console.log('处理默认语言配置...');
-                const defaultGenDir = defaultLanguage['generate-dir'];
+            await this.runBuildsInParallel(contexts);
 
-                defaultLanguage['config-file-name'].forEach(configFile => {
-                    this.processConfigFile(configFile, switchConfig?.['support-theme']);
-                });
+            const defaultGenDir = builds.find(build => build.isDefault).generateDir;
+            this.mergeLanguageOutputs(contexts, defaultGenDir);
 
-                this.executeHexoCommands();
-
-                // 合并所有语言版本
-                this.mergeLanguageVersions(processedDirs, defaultGenDir);
-
-                // 处理语言切换文件
-                if (switchConfig?.['support-theme']) {
-                    console.log('设置语言切换功能...');
-                    // 处理其他语言的切换文件
-                    processedDirs.forEach(({ languagePath }) => {
-                        const targetDir = path.join(this.baseDir, defaultGenDir, languagePath);
+            if (switchSupportTheme) {
+                console.log('设置语言切换功能...');
+                contexts
+                    .filter(context => !context.isDefault)
+                    .forEach(context => {
+                        const targetDir = path.join(this.baseDir, defaultGenDir, context.languagePath);
                         this.processSwitchLanguageFile(switchConfig, targetDir);
                     });
 
-                    // 处理默认语言的切换文件
-                    const defaultTargetDir = path.join(this.baseDir, defaultGenDir);
-                    this.processSwitchLanguageFile(switchConfig, defaultTargetDir);
-                }
+                this.processSwitchLanguageFile(switchConfig, path.join(this.baseDir, defaultGenDir));
             }
 
-            console.log('多语言生成处理完成');
+            console.log('多语言并行生成处理完成');
         } catch (error) {
             console.error('多语言生成处理失败:', error);
             throw error;
+        } finally {
+            this.cleanupBuildContexts(contexts);
         }
     }
 }
 
 // 注册 Hexo 命令
-hexo.extend.console.register('multiple-language-generate', '生成多语言版本', {}, function() {
-    try {
-        const generator = new MultiLanguageGenerator(hexo);
-        generator.process();
-    } catch (error) {
-        console.error('执行多语言生成命令失败:', error);
-        process.exit(1);
-    }
-});
+if (typeof hexo !== 'undefined' && hexo.extend?.console) {
+    hexo.extend.console.register('multiple-language-generate', '并行生成多语言版本', {}, async function() {
+        try {
+            const generator = new MultiLanguageGenerator(hexo);
+            await generator.process();
+        } catch (error) {
+            console.error('执行多语言生成命令失败:', error);
+            process.exit(1);
+        }
+    });
+}
+
+module.exports = {
+    CONFIG,
+    ConfigManager,
+    FileSystemUtils,
+    MultiLanguageGenerator
+};

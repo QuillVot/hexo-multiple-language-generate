@@ -1,5 +1,3 @@
-Here's the English translation of your Markdown document:
-
 # Hexo Multiple Language Generate
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/QuillVot/hexo-multiple-language-generate)
@@ -16,7 +14,7 @@ A plugin that simplifies multi-language generation and management for Hexo blogs
 - ⚙️ **Flexible Configuration** - Customize language settings, URL structure, and output paths
 - 🔌 **Easy Integration** - Quick integration into existing Hexo projects
 - 🦋 **Butterfly Theme Compatible** - Optimized multi-language switching support for Butterfly theme
-- 🚀 **Efficient Building** - Optimized build process with parallel processing support
+- 🚀 **Parallel Building** - Generate every language in an isolated temporary directory in parallel
 
 ## 📦 Installation
 
@@ -28,7 +26,7 @@ npm install hexo-multiple-language-generate --save
 
 ### 1. Prerequisites
 
-- Node.js (>= 12.0.0)
+- Node.js (>= 14.17.0)
 - Hexo (>= 5.0.0)
 - Butterfly theme (optional)
 
@@ -160,6 +158,8 @@ Replace the original `hexo generate` command:
 ```bash
 hexo multiple-language-generate
 ```
+
+The plugin creates an isolated temporary build directory for the default language and every enabled additional language, then runs Hexo generation in parallel. After generation finishes, the default language output becomes the final `public` directory and the other language outputs are merged into their language subdirectories.
 
 ### Development Mode
 

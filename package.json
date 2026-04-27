@@ -1,12 +1,18 @@
 {
   "name": "hexo-multiple-language-generate",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "description": "hexo multi-language support plugin",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "engines": {
+    "node": ">=14.17"
   },
-  "dependencies": {
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "peerDependencies": {
+    "hexo": ">=5.0.0 <8"
+  },
+  "devDependencies": {
     "hexo": "^7.3.0"
   },
   "keywords": [
