@@ -2,8 +2,10 @@ name: Publish to npm
 on:
   # 手动触发
   workflow_dispatch:
-  #push:
-    #branches: main
+  # 推送到 main 分支时自动触发（如需启用，取消下面的注释）
+  # push:
+  #   branches:
+  #     - main
 
 jobs:
   publish:
@@ -11,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write # npm provenance 需要
     steps:
       - name: Clone repository
         uses: actions/checkout@v6 # 克隆代码
@@ -22,7 +24,13 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org/"
 
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # 调用 github 填写的 NPM_TOKEN
