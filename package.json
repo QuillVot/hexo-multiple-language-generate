@@ -4,16 +4,16 @@
   "description": "hexo multi-language support plugin",
   "main": "index.js",
   "engines": {
-    "node": ">=14.17"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "test": "node tests/run.js"
   },
   "peerDependencies": {
-    "hexo": ">=5.0.0 <8"
+    "hexo": ">=5.0.0 <9"
   },
   "devDependencies": {
-    "hexo": "^7.3.0"
+    "hexo": "^8.1.2"
   },
   "keywords": [
     "npm",
