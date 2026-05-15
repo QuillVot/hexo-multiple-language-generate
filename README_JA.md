@@ -44,12 +44,12 @@ npm install hexo-multiple-language-generate --save
 ├── source-zh/                        # 中国語コンテンツディレクトリ
 │   ├── _posts/                       # 中国語記事
 │   └── about/                        # 中国語アバウトページ
-├── config.butterfly.en.yml/          # Butterflyテーマ設定ファイル
-├── config.butterfly.ja.yml/
-├── config.butterfly.zh.yml/
-├── config.en.yml/                    # hexo基本設定ファイル
-├── config.ja.yml/
-├── config.zh.yml/
+├── config.butterfly.en.yml           # 完全なButterflyテーマ設定ファイル
+├── config.butterfly.ja.yml
+├── config.butterfly.zh.yml
+├── config.en.yml                     # 完全なHexo基本設定ファイル
+├── config.ja.yml
+├── config.zh.yml
 ├── hexo-multiple-language.yml        # プラグイン設定ファイル
 └── package.json
 ```
@@ -64,7 +64,13 @@ npm install hexo-multiple-language-generate --save
 
 このプラグインでは、ネイティブのHexoやButterflyテーマの`_config.yml`、`_config.butterfly.yml`などの設定ファイルは不要です。プラグインは異なる言語に応じて対応する設定ファイルを自動生成します。複数の言語`yml`設定を手動で管理する必要があります。
 
-##### 中国語設定 (config.zh.yml)
+> **重要：`config.[lang].yml` は差分設定ではなく、完全な Hexo 設定ファイルである必要があります。**
+>
+> このプラグインは `config.zh.yml`、`config.en.yml` などのファイルを、各ビルドで使用する `_config.yml` として直接コピーします。元の `_config.yml` とのマージは行いません。`url`、`root`、`source_dir` などの差分だけを書くと、`theme`、サイト情報、プラグイン設定、デプロイ設定など、書かれていない項目は失われます。その結果、Hexo がデフォルトの Landscape テーマに戻ったり、生成結果が不完全になったりする可能性があります。
+>
+> 推奨手順：完全な `_config.yml` を `config.zh.yml`、`config.en.yml`、`config.ja.yml` にコピーしてから、下記例のような言語ごとの差分項目を編集してください。Butterfly も同様に、完全な `_config.butterfly.yml` を各 `config.butterfly.[lang].yml` にコピーしてから、メニューや表示テキストなどを調整してください。
+
+##### 中国語設定スニペット (config.zh.yml)
 ```yaml
 # URL設定
 url: https://quillvot.github.io/
@@ -80,7 +86,7 @@ ignore:
   - source-ja/
 ```
 
-##### 英語設定 (config.en.yml)
+##### 英語設定スニペット (config.en.yml)
 ```yaml
 # URL
 url: https://quillvot.github.io/en
@@ -96,7 +102,7 @@ ignore:
   - source-ja/
 ```
 
-##### 日本語設定 (config.ja.yml)
+##### 日本語設定スニペット (config.ja.yml)
 ```yaml
 # URL
 url: https://quillvot.github.io/ja
@@ -116,7 +122,9 @@ ignore:
 
 異なる言語バージョンのナビゲーションメニューに言語切り替えオプションを設定：`multiple-language-switch`
 
-#### 中国語 (config.butterfly.zh.yml)
+> **注意：以下の Butterfly 設定例は、言語ごとに変更する部分だけを示したスニペットです。** 実際の `config.butterfly.[lang].yml` には完全なテーマ設定を含めてください。省略されたテーマ設定は失われます。
+
+#### 中国語設定スニペット (config.butterfly.zh.yml)
 ```yaml
 menu:
   语言||fas fa-language:
@@ -127,7 +135,7 @@ menu:
 # その他のButterflyテーマ設定...
 ```
 
-#### 英語 (config.butterfly.en.yml)
+#### 英語設定スニペット (config.butterfly.en.yml)
 ```yaml
 menu:
   Language||fas fa-language:
@@ -138,7 +146,7 @@ menu:
 # Other Butterfly theme configurations...
 ```
 
-#### 日本語 (config.butterfly.ja.yml)
+#### 日本語設定スニペット (config.butterfly.ja.yml)
 ```yaml
 menu:
   げんご||fas fa-language:
@@ -187,11 +195,11 @@ hexo multiple-language-generate && hexo deploy
 hexo-multiple-language:
   # ===== デフォルト言語設定 =====
   default-language:
-    # Hexoデフォルト言語の生成ディレクトリ
+    # Hexoデフォルト言語の生成ディレクトリ。config.zh.yml の public_dir と一致させてください
     "generate-dir": "public"
 
-    # デフォルト言語の設定ファイルリスト
-    # 複数の設定ファイルを設定可能、順番に読み込んでマージ
+    # デフォルト言語の完全な設定ファイルリスト
+    # プラグインはこれらをビルドディレクトリの _config*.yml としてコピーし、元の設定ファイルとはマージしません
     "config-file-name": [
       "config.zh",           # Hexoメイン設定ファイル
       "config.butterfly.zh"  # Butterflyテーマ設定ファイル
@@ -202,8 +210,10 @@ hexo-multiple-language:
   other-language: [
     {
       "enable": true,              # この言語を有効にするかどうか
-      "generate-dir": "public-en", # 現在の言語の生成ディレクトリ
-      "language-path": "en",       # メイン言語ディレクトリ下のサブディレクトリ名
+      "generate-dir": "public-en", # この言語の生成ディレクトリ。config.en.yml の public_dir と一致させてください
+      "language-path": "en",       # デフォルト言語の出力ディレクトリにマージされるサブディレクトリ名
+      # この言語の完全な設定ファイルリスト
+      # プラグインはこれらをビルドディレクトリの _config*.yml としてコピーし、元の設定ファイルとはマージしません
       "config-file-name": [
         "config.en",              # 英語版Hexo設定
         "config.butterfly.en"     # 英語版テーマ設定
@@ -211,8 +221,10 @@ hexo-multiple-language:
     },
     {
       "enable": true,
-      "generate-dir": "public-ja",
-      "language-path": "ja",
+      "generate-dir": "public-ja", # config.ja.yml の public_dir と一致させてください
+      "language-path": "ja",       # デフォルト言語の出力ディレクトリにマージされるサブディレクトリ名
+      # この言語の完全な設定ファイルリスト
+      # プラグインはこれらをビルドディレクトリの _config*.yml としてコピーし、元の設定ファイルとはマージしません
       "config-file-name": [
         "config.ja",
         "config.butterfly.ja"
@@ -226,7 +238,8 @@ hexo-multiple-language:
     # 言語切り替え機能を有効にするかどうか
     enable: true
 
-    # 使用するテーマ設定ファイル
+    # 言語切り替えスクリプトを自動注入するテーマ設定ファイル名のプレフィックス
+    # 例: config.butterfly は config.butterfly.zh、config.butterfly.en などにマッチします
     support-theme: "config.butterfly"
 
     # 手動で言語を切り替えた後の有効期限（ミリ秒）
@@ -242,7 +255,7 @@ hexo-multiple-language:
     ]
 
     # その他の言語がサポートする言語コードマッピング
-    # key: language-pathの値に対応
+    # key: 有効化された language-path の値に対応
     # value: その言語がサポートする言語コードリスト。valueは複数設定可能。例：「ja」：[「ja」,「en-CA」]は、ブラウザ設定がカナダ英語でも日本語をデフォルト表示
     other-language: {
       "en": ["en"],

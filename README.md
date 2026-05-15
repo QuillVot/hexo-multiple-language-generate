@@ -44,12 +44,12 @@ npm install hexo-multiple-language-generate --save
 ├── source-zh/                        # 中文内容目录
 │   ├── _posts/                       # 中文文章
 │   └── about/                        # 中文关于页面
-├── config.butterfly.en.yml/          # Butterfly 主题配置文件
-├── config.butterfly.ja.yml/
-├── config.butterfly.zh.yml/
-├── config.en.yml/                    # hexo 基础配置文件
-├── config.ja.yml/
-├── config.zh.yml/
+├── config.butterfly.en.yml           # Butterfly 主题完整配置文件
+├── config.butterfly.ja.yml
+├── config.butterfly.zh.yml
+├── config.en.yml                     # Hexo 基础完整配置文件
+├── config.ja.yml
+├── config.zh.yml
 ├── hexo-multiple-language.yml        # 插件配置文件
 └── package.json
 ```
@@ -65,7 +65,13 @@ npm install hexo-multiple-language-generate --save
 
 在此插件的使用中，不需要原生 Hexo 或 Butterfly 主题中的 `_config.yml`、`_config.butterfly.yml ` 等配置文件。插件会根据不同语言自动生成对应的配置文件，需手动维护多个语言`yml`配置。
 
-##### 中文配置 (config.zh.yml)
+> **重要：`config.[lang].yml` 必须是完整的 Hexo 配置文件，不是差异配置片段。**
+>
+> 插件会将 `config.zh.yml`、`config.en.yml` 等文件直接复制为构建时使用的 `_config.yml`，不会与原始 `_config.yml` 做合并。如果只写 `url`、`root`、`source_dir` 等差异字段，`theme`、站点信息、插件配置、部署配置等未写入的内容都会丢失，可能导致主题回退到默认 Landscape 或生成结果异常。
+>
+> 推荐做法：先复制一份完整的 `_config.yml` 为 `config.zh.yml`、`config.en.yml`、`config.ja.yml`，再分别修改下面示例中的语言相关字段。Butterfly 配置同理，`config.butterfly.[lang].yml` 也应从完整的 `_config.butterfly.yml` 复制后调整。
+
+##### 中文配置片段 (config.zh.yml)
 ```yaml
 # URL配置
 url: https://quillvot.github.io/
@@ -81,7 +87,7 @@ ignore:
   - source-ja/
 ```
 
-##### 英文配置 (config.en.yml)
+##### 英文配置片段 (config.en.yml)
 ```yaml
 # URL
 url: https://quillvot.github.io/en
@@ -97,7 +103,7 @@ ignore:
   - source-ja/
 ```
 
-##### 日文配置 (config.ja.yml)
+##### 日文配置片段 (config.ja.yml)
 ```yaml
 # URL
 url: https://quillvot.github.io/ja
@@ -117,7 +123,9 @@ ignore:
 
 为不同语言版本配置导航菜单的语言切换选项：`multiple-language-switch`
 
-#### 中文 (config.butterfly.zh.yml)
+> **注意：以下 Butterfly 配置也只是需要按语言调整的片段。** 实际的 `config.butterfly.[lang].yml` 应包含完整主题配置，否则未写入的主题选项会丢失。
+
+#### 中文配置片段 (config.butterfly.zh.yml)
 ```yaml
 menu:
   语言||fas fa-language:
@@ -128,7 +136,7 @@ menu:
 # 其他 Butterfly 主题配置...
 ```
 
-#### 英文 (config.butterfly.en.yml)
+#### 英文配置片段 (config.butterfly.en.yml)
 ```yaml
 menu:
   Language||fas fa-language:
@@ -139,7 +147,7 @@ menu:
 # Other Butterfly theme configurations...
 ```
 
-#### 日文 (config.butterfly.ja.yml)
+#### 日文配置片段 (config.butterfly.ja.yml)
 ```yaml
 menu:
   げんご||fas fa-language:
@@ -188,11 +196,11 @@ hexo multiple-language-generate && hexo deploy
 hexo-multiple-language:
   # ===== 默认语言配置 =====
   default-language:
-    # Hexo默认语言的生成目录
+    # Hexo默认语言的生成目录，需与 config.zh.yml 中的 public_dir 保持一致
     "generate-dir": "public"
 
-    # 默认语言的配置文件列表
-    # 支持设置多个配置文件,按顺序加载并合并
+    # 默认语言的完整配置文件列表
+    # 插件会将这些文件复制为构建目录中的 _config*.yml，不会与原始配置合并
     "config-file-name": [
       "config.zh",           # Hexo主配置文件
       "config.butterfly.zh"  # Butterfly主题配置文件
@@ -203,8 +211,10 @@ hexo-multiple-language:
   other-language: [
     {
       "enable": true,              # 是否启用该语言
-      "generate-dir": "public-en", # 当前语言的生成目录
-      "language-path": "en",       # 生成到主语言目录下的子目录名
+      "generate-dir": "public-en", # 当前语言的生成目录，需与 config.en.yml 中的 public_dir 保持一致
+      "language-path": "en",       # 合并到默认语言输出目录下的子目录名
+      # 当前语言的完整配置文件列表
+      # 插件会将这些文件复制为构建目录中的 _config*.yml，不会与原始配置合并
       "config-file-name": [
         "config.en",              # 英文版Hexo配置
         "config.butterfly.en"     # 英文版主题配置
@@ -212,8 +222,10 @@ hexo-multiple-language:
     },
     {
       "enable": true,
-      "generate-dir": "public-ja",
-      "language-path": "ja",
+      "generate-dir": "public-ja", # 需与 config.ja.yml 中的 public_dir 保持一致
+      "language-path": "ja",       # 合并到默认语言输出目录下的子目录名
+      # 当前语言的完整配置文件列表
+      # 插件会将这些文件复制为构建目录中的 _config*.yml，不会与原始配置合并
       "config-file-name": [
         "config.ja",
         "config.butterfly.ja"
@@ -227,7 +239,8 @@ hexo-multiple-language:
     # 是否启用语言切换功能
     enable: true
 
-    # 使用的主题配置文件
+    # 需要自动注入语言切换脚本的主题配置文件名前缀
+    # 例如 config.butterfly 会匹配 config.butterfly.zh、config.butterfly.en 等配置文件
     support-theme: "config.butterfly"
 
     # 手动切换语言后的有效期(单位:毫秒)
@@ -243,7 +256,7 @@ hexo-multiple-language:
     ]
 
     # 其他语言支持的语言代码映射
-    # key: 对应language-path的值
+    # key: 对应已启用语言的 language-path 值
     # value: 该语言支持的语言代码列表，value可配置多个，如 "ja":["ja","en-CA"]，表示浏览器设置的语言是加拿大英语，默认也显示日语
     other-language: {
       "en": ["en"],

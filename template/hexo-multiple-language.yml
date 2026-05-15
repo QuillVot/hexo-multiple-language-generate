@@ -3,11 +3,11 @@
 hexo-multiple-language:
   # ===== 默认语言配置 =====
   default-language:
-    # Hexo默认语言的生成目录
+    # Hexo默认语言的生成目录，需与 config.zh.yml 中的 public_dir 保持一致
     "generate-dir": "public"
 
-    # 默认语言的配置文件列表
-    # 支持设置多个配置文件,按顺序加载并合并
+    # 默认语言的完整配置文件列表
+    # 插件会将这些文件复制为构建目录中的 _config*.yml，不会与原始配置合并
     "config-file-name": [
       "config.zh",           # Hexo主配置文件
       "config.butterfly.zh"  # Butterfly主题配置文件
@@ -18,8 +18,10 @@ hexo-multiple-language:
   other-language: [
     {
       "enable": true,              # 是否启用该语言
-      "generate-dir": "public-en", # 当前语言的生成目录
-      "language-path": "en",       # 生成到主语言目录下的子目录名
+      "generate-dir": "public-en", # 当前语言的生成目录，需与 config.en.yml 中的 public_dir 保持一致
+      "language-path": "en",       # 合并到默认语言输出目录下的子目录名
+      # 当前语言的完整配置文件列表
+      # 插件会将这些文件复制为构建目录中的 _config*.yml，不会与原始配置合并
       "config-file-name": [
         "config.en",              # 英文版Hexo配置
         "config.butterfly.en"     # 英文版主题配置
@@ -27,8 +29,10 @@ hexo-multiple-language:
     },
     {
       "enable": true,
-      "generate-dir": "public-ja",
-      "language-path": "ja",
+      "generate-dir": "public-ja", # 需与 config.ja.yml 中的 public_dir 保持一致
+      "language-path": "ja",       # 合并到默认语言输出目录下的子目录名
+      # 当前语言的完整配置文件列表
+      # 插件会将这些文件复制为构建目录中的 _config*.yml，不会与原始配置合并
       "config-file-name": [
         "config.ja",
         "config.butterfly.ja"
@@ -42,7 +46,8 @@ hexo-multiple-language:
     # 是否启用语言切换功能
     enable: true
 
-    # 使用的主题配置文件
+    # 需要自动注入语言切换脚本的主题配置文件名前缀
+    # 例如 config.butterfly 会匹配 config.butterfly.zh、config.butterfly.en 等配置文件
     support-theme: "config.butterfly"
 
     # 手动切换语言后的有效期(单位:毫秒)
@@ -58,7 +63,7 @@ hexo-multiple-language:
     ]
 
     # 其他语言支持的语言代码映射
-    # key: 对应language-path的值
+    # key: 对应已启用语言的 language-path 值
     # value: 该语言支持的语言代码列表，value可配置多个，如 "ja":["ja","en-CA"]，表示浏览器设置的语言是加拿大英语，默认也显示日语
     other-language: {
       "en": ["en"],

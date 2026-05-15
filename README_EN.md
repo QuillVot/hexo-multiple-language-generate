@@ -44,12 +44,12 @@ npm install hexo-multiple-language-generate --save
 ├── source-zh/                        # Chinese content directory
 │   ├── _posts/                       # Chinese articles
 │   └── about/                        # Chinese about page
-├── config.butterfly.en.yml/          # Butterfly theme configuration files
-├── config.butterfly.ja.yml/
-├── config.butterfly.zh.yml/
-├── config.en.yml/                    # Hexo base configuration files
-├── config.ja.yml/
-├── config.zh.yml/
+├── config.butterfly.en.yml           # Complete Butterfly theme configuration file
+├── config.butterfly.ja.yml
+├── config.butterfly.zh.yml
+├── config.en.yml                     # Complete Hexo base configuration file
+├── config.ja.yml
+├── config.zh.yml
 ├── hexo-multiple-language.yml        # Plugin configuration file
 └── package.json
 ```
@@ -64,7 +64,13 @@ Copy [`hexo-multiple-language.yml`](./template/hexo-multiple-language.yml) to yo
 
 This plugin doesn't require the native Hexo or Butterfly theme `_config.yml`, `_config.butterfly.yml` configuration files. The plugin automatically generates corresponding configuration files based on different languages, requiring manual maintenance of multiple language `yml` configurations.
 
-##### Chinese Configuration (config.zh.yml)
+> **Important: `config.[lang].yml` must be a complete Hexo configuration file, not a partial diff.**
+>
+> The plugin copies `config.zh.yml`, `config.en.yml`, and similar files directly to the `_config.yml` used during each build. It does not merge them with the original `_config.yml`. If you only write different fields such as `url`, `root`, or `source_dir`, omitted settings such as `theme`, site metadata, plugin options, and deploy configuration will be lost. This can make Hexo fall back to the default Landscape theme or generate an incomplete site.
+>
+> Recommended workflow: copy your full `_config.yml` to `config.zh.yml`, `config.en.yml`, and `config.ja.yml`, then edit the language-specific fields shown in the examples below. Use the same approach for Butterfly: copy the full `_config.butterfly.yml` to each `config.butterfly.[lang].yml` before adjusting language-specific menu or text.
+
+##### Chinese Configuration Snippet (config.zh.yml)
 ```yaml
 # URL Configuration
 url: https://quillvot.github.io/
@@ -80,7 +86,7 @@ ignore:
   - source-ja/
 ```
 
-##### English Configuration (config.en.yml)
+##### English Configuration Snippet (config.en.yml)
 ```yaml
 # URL
 url: https://quillvot.github.io/en
@@ -96,7 +102,7 @@ ignore:
   - source-ja/
 ```
 
-##### Japanese Configuration (config.ja.yml)
+##### Japanese Configuration Snippet (config.ja.yml)
 ```yaml
 # URL
 url: https://quillvot.github.io/ja
@@ -116,7 +122,9 @@ ignore:
 
 Configure language switching options in navigation menu for different language versions: `multiple-language-switch`
 
-#### Chinese (config.butterfly.zh.yml)
+> **Note: the Butterfly examples below are snippets of fields that usually differ by language.** The actual `config.butterfly.[lang].yml` files should contain the full theme configuration, otherwise omitted theme options will be lost.
+
+#### Chinese Configuration Snippet (config.butterfly.zh.yml)
 ```yaml
 menu:
   语言||fas fa-language:
@@ -127,7 +135,7 @@ menu:
 # Other Butterfly theme configurations...
 ```
 
-#### English (config.butterfly.en.yml)
+#### English Configuration Snippet (config.butterfly.en.yml)
 ```yaml
 menu:
   Language||fas fa-language:
@@ -138,7 +146,7 @@ menu:
 # Other Butterfly theme configurations...
 ```
 
-#### Japanese (config.butterfly.ja.yml)
+#### Japanese Configuration Snippet (config.butterfly.ja.yml)
 ```yaml
 menu:
   げんご||fas fa-language:
@@ -187,11 +195,11 @@ hexo multiple-language-generate && hexo deploy
 hexo-multiple-language:
   # ===== Default Language Configuration =====
   default-language:
-    # Generation directory for Hexo default language
+    # Generation directory for the Hexo default language; keep it consistent with public_dir in config.zh.yml
     "generate-dir": "public"
 
-    # List of configuration files for default language
-    # Supports multiple configuration files, loaded and merged in order
+    # List of complete configuration files for the default language
+    # The plugin copies them to _config*.yml in the build directory; it does not merge them with the original config files
     "config-file-name": [
       "config.zh",           # Hexo main configuration file
       "config.butterfly.zh"  # Butterfly theme configuration file
@@ -202,8 +210,10 @@ hexo-multiple-language:
   other-language: [
     {
       "enable": true,              # Whether to enable this language
-      "generate-dir": "public-en", # Generation directory for current language
-      "language-path": "en",       # Subdirectory name under main language directory
+      "generate-dir": "public-en", # Generation directory for this language; keep it consistent with public_dir in config.en.yml
+      "language-path": "en",       # Subdirectory name merged into the default language output directory
+      # List of complete configuration files for this language
+      # The plugin copies them to _config*.yml in the build directory; it does not merge them with the original config files
       "config-file-name": [
         "config.en",              # English version Hexo configuration
         "config.butterfly.en"     # English version theme configuration
@@ -211,8 +221,10 @@ hexo-multiple-language:
     },
     {
       "enable": true,
-      "generate-dir": "public-ja",
-      "language-path": "ja",
+      "generate-dir": "public-ja", # Keep it consistent with public_dir in config.ja.yml
+      "language-path": "ja",       # Subdirectory name merged into the default language output directory
+      # List of complete configuration files for this language
+      # The plugin copies them to _config*.yml in the build directory; it does not merge them with the original config files
       "config-file-name": [
         "config.ja",
         "config.butterfly.ja"
@@ -226,7 +238,8 @@ hexo-multiple-language:
     # Whether to enable language switching
     enable: true
 
-    # Theme configuration file to use
+    # Theme configuration filename prefix used for automatic language-switch script injection
+    # For example, config.butterfly matches config.butterfly.zh, config.butterfly.en, and similar files
     support-theme: "config.butterfly"
 
     # Validity period after manual language switch (in milliseconds)
@@ -242,7 +255,7 @@ hexo-multiple-language:
     ]
 
     # Language code mapping for other languages
-    # key: corresponds to language-path value
+    # key: corresponds to an enabled language-path value
     # value: list of supported language codes for that language
     other-language: {
       "en": ["en"],
